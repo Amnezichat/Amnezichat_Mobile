@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="dark_input_background">#1E1E1E</color>
+    <color name="dark_send_button_background">#2979FF</color>
+    <color name="blue_100">#FFBBDEFB</color>
+    <color name="blue_300">#FF64B5F6</color>
+    <color name="blue_500">#FF2196F3</color>
+    <color name="blue_700">#FF1976D2</color>
+    <color name="blue_900">#FF0D47A1</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
