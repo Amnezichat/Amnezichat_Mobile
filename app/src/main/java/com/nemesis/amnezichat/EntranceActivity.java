@@ -30,7 +30,7 @@ public class EntranceActivity extends AppCompatActivity {
     private Button createRoomButton, joinRoomButton, submitButton, pickWallpaperButton, forgetEverythingButton;
     private TextView generatedRoomIdLabel, errorMessageText;
     private EditText roomIdInput, serverUrlInput, usernameInput, roomPasswordInput;
-    private CheckBox rememberSettingsCheckbox;
+    private CheckBox rememberSettingsCheckbox, daitaCheckbox;
 
     private String choice = "";
 
@@ -52,10 +52,12 @@ public class EntranceActivity extends AppCompatActivity {
         usernameInput = findViewById(R.id.usernameInput);
         roomPasswordInput = findViewById(R.id.roomPasswordInput);
         rememberSettingsCheckbox = findViewById(R.id.rememberSettingsCheckbox);
+        daitaCheckbox = findViewById(R.id.daitaCheckbox);
 
         SharedPreferences prefs = getSharedPreferences("ChatPrefs", MODE_PRIVATE);
         boolean rememberSettings = prefs.getBoolean("remember_settings", false);
         rememberSettingsCheckbox.setChecked(rememberSettings);
+        daitaCheckbox.setChecked(prefs.getBoolean("daita_enabled", false));
 
         if (rememberSettings) {
             serverUrlInput.setText(prefs.getString("server_url", ""));
@@ -117,6 +119,7 @@ public class EntranceActivity extends AppCompatActivity {
             usernameInput.setText("");
             roomPasswordInput.setText("");
             rememberSettingsCheckbox.setChecked(false);
+            daitaCheckbox.setChecked(false);
             roomIdInput.setVisibility(View.GONE);
             generatedRoomIdLabel.setVisibility(View.GONE);
             errorMessageText.setVisibility(View.GONE);
@@ -130,6 +133,7 @@ public class EntranceActivity extends AppCompatActivity {
             String username = usernameInput.getText().toString().trim();
             String roomId = roomIdInput.getText().toString().trim();
             String roomPassword = roomPasswordInput.getText().toString().trim();
+            boolean daitaEnabled = daitaCheckbox.isChecked();
 
             if (serverUrl.isEmpty() || username.isEmpty()) {
                 showError("Please fill in Server URL and Username.");
@@ -166,6 +170,7 @@ public class EntranceActivity extends AppCompatActivity {
                 editor.putString("username", username);
                 editor.putString("room_id", roomId);
                 editor.putString("room_password", roomPassword);
+                editor.putBoolean("daita_enabled", daitaEnabled);
             } else {
                 editor.clear();
             }
@@ -177,9 +182,8 @@ public class EntranceActivity extends AppCompatActivity {
             intent.putExtra("server_url", serverUrl);
             intent.putExtra("username", username);
             intent.putExtra("room_id", roomId);
-            intent.putExtra("is_group_chat", true);
-            intent.putExtra("room_password", roomPassword);
             intent.putExtra("encryption_key", encryptionKeyHex);
+            intent.putExtra("daita_enabled", String.valueOf(daitaEnabled));
             startActivity(intent);
             finish();
         });
@@ -225,7 +229,7 @@ public class EntranceActivity extends AppCompatActivity {
             byte[] fullHash = sha3.digest(passwordBytes);
 
             byte[] salt = Arrays.copyOf(fullHash, 16);
-            Log.d(TAG, "Salt (Hex): " + bytesToHex(salt));
+            Log.d(TAG, "Salt generated for key derivation");
 
             Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
                     .withSalt(salt)
@@ -239,12 +243,11 @@ public class EntranceActivity extends AppCompatActivity {
             byte[] key = new byte[32];
             generator.generateBytes(passwordBytes, key);
 
-            String hexKey = bytesToHex(key);
-            Log.d(TAG, "Derived key (Hex): " + hexKey);
-            return hexKey;
+            Log.d(TAG, "Derived key generated successfully");
+            return bytesToHex(key);
 
         } catch (Exception e) {
-            Log.e(TAG, "deriveKeyFromPassword failed", e);
+            Log.e(TAG, "Key derivation failed", e);
             throw new RuntimeException("Key derivation failed: " + e.getMessage(), e);
         }
     }

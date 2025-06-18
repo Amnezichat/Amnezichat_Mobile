@@ -34,6 +34,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -49,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText inputMessage;
     private MaterialButton sendButton, recordButton, uploadImageButton;
 
-    private String serverUrl, username, roomId, encryptionKeyHex;
+    private String serverUrl, username, roomId, encryptionKeyHex, daita;
 
     private Handler handler;
     private Handler backgroundHandler;
@@ -88,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
         username = getIntent().getStringExtra("username");
         roomId = getIntent().getStringExtra("room_id");
         encryptionKeyHex = getIntent().getStringExtra("encryption_key");
+        daita = getIntent().getStringExtra("daita_enabled");
 
         messageAdapter = new MessageAdapter(messageList);
         RecyclerView recyclerView = findViewById(R.id.recyclerView);
@@ -113,7 +115,9 @@ public class MainActivity extends AppCompatActivity {
             String text = inputMessage.getText().toString().trim();
             if (!text.isEmpty()) {
                 backgroundHandler.post(() -> {
-                    String encrypted = CryptoUtil.encrypt_data("<strong>" + username + "</strong>: " + text, encryptionKeyHex);
+                    String message = "<strong>" + username + "</strong>: " + text;
+                    String padded = padMessage(message, 2048);
+                    String encrypted = CryptoUtil.encrypt_data(padded, encryptionKeyHex);
                     if (encrypted != null) {
                         MessageService.sendEncryptedMessage(encrypted, roomId, serverUrl);
                         runOnUiThread(() -> inputMessage.setText(""));
@@ -130,6 +134,62 @@ public class MainActivity extends AppCompatActivity {
         uploadImageButton.setOnClickListener(v -> openImagePicker());
 
         startFetchingMessages();
+
+        if ("true".equalsIgnoreCase(daita)) {
+            startFakeTrafficThread();
+        }
+    }
+
+    private void startFakeTrafficThread() {
+        Thread fakeTrafficThread = new Thread(() -> {
+            Random rand = new Random();
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    int size = rand.nextInt(2048) + 1;
+                    byte[] randomData = new byte[size];
+                    rand.nextBytes(randomData);
+
+                    String dummyMessage = "[DUMMY_DATA]: " + Base64.encodeToString(randomData, Base64.NO_WRAP);
+                    String paddedMessage = padMessage(dummyMessage, 2048);
+                    String encrypted = CryptoUtil.encrypt_data(paddedMessage, encryptionKeyHex);
+
+                    if (encrypted != null) {
+                        MessageService.sendEncryptedMessage(encrypted, roomId, serverUrl);
+                        Log.d(TAG, "Fake message sent successfully");
+                    } else {
+                        Log.e(TAG, "Encryption failed for a message");
+                    }
+
+                    int sleepTime = rand.nextInt(120) + 1;
+                    Thread.sleep(sleepTime * 1000L);
+                } catch (InterruptedException e) {
+                    Log.i(TAG, "Fake traffic thread interrupted, stopping.");
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    Log.e(TAG, "Error in fake traffic thread", e);
+                }
+            }
+        });
+        fakeTrafficThread.start();
+    }
+
+    private String padMessage(String message, int maxLength) {
+        int currentLength = message.length();
+        if (currentLength >= maxLength) {
+            return message;
+        }
+
+        int paddingLength = maxLength - currentLength;
+        StringBuilder padding = new StringBuilder(paddingLength);
+        java.util.Random random = new java.util.Random();
+
+        for (int i = 0; i < paddingLength; i++) {
+            char ch = (char) (random.nextInt(94) + 33);
+            padding.append(ch);
+        }
+
+        return message + "<padding>" + padding + "</padding>";
     }
 
     private void startFetchingMessages() {
@@ -205,8 +265,9 @@ public class MainActivity extends AppCompatActivity {
                     byte[] audioBytes = readFileToBytes(audioFile);
                     String base64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP);
                     String message = "<audio>" + base64 + "</audio>";
-
-                    String encrypted = CryptoUtil.encrypt_data("<strong>" + username + "</strong>: " + message, encryptionKeyHex);
+                    String composed = "<strong>" + username + "</strong>: " + message;
+                    String padded = padMessage(composed, 2048);
+                    String encrypted = CryptoUtil.encrypt_data(padded, encryptionKeyHex);
                     if (encrypted != null) {
                         MessageService.sendEncryptedMessage(encrypted, roomId, serverUrl);
                     }
@@ -272,7 +333,9 @@ public class MainActivity extends AppCompatActivity {
 
                         String base64Image = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
                         String message = "<media>" + base64Image + "</media>";
-                        String encrypted = CryptoUtil.encrypt_data("<strong>" + username + "</strong>: " + message, encryptionKeyHex);
+                        String composed = "<strong>" + username + "</strong>: " + message;
+                        String padded = padMessage(composed, 2048);
+                        String encrypted = CryptoUtil.encrypt_data(padded, encryptionKeyHex);
 
                         runOnUiThread(() -> {
                             if (encrypted != null) {

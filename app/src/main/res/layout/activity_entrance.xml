@@ -109,6 +109,15 @@
                 android:text="Remember settings"
                 android:textColor="#E0E0E0"
                 android:buttonTint="#448AFF"
+                android:layout_marginBottom="8dp" />
+
+            <CheckBox
+                android:id="@+id/daitaCheckbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Enable DAITA"
+                android:textColor="#E0E0E0"
+                android:buttonTint="#FF5722"
                 android:layout_marginBottom="16dp" />
 
             <TextView

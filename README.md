@@ -17,6 +17,8 @@ An anti-forensic messenger offers significant benefits by enhancing the privacy 
 
 - Argon2id for key derivation with memory cost of 19456KB, iterations of 2, and parallelization of 1
 
+- DAITA option (Defense against AI-guided Traffic Analysis)
+
 - Client doesn't log anything to storage
 
 - Each message is stored encrypted in server's RAM and wiped after 10 minutes
