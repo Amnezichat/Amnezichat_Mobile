@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -26,11 +25,16 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
 
+import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,7 +54,10 @@ public class MainActivity extends AppCompatActivity {
     private EditText inputMessage;
     private MaterialButton sendButton, recordButton, uploadImageButton;
 
-    private String serverUrl, username, roomId, encryptionKeyHex, daita;
+    private String serverUrl, username, roomId, encryptionKeyHex;
+    private String privatePassword;
+    private boolean isGroupChat;
+    private String daita;
 
     private Handler handler;
     private Handler backgroundHandler;
@@ -71,9 +78,10 @@ public class MainActivity extends AppCompatActivity {
             try {
                 Uri wallpaperUri = Uri.parse(wallpaperUriString);
                 ConstraintLayout rootLayout = findViewById(R.id.rootLayout);
-                InputStream is = getContentResolver().openInputStream(wallpaperUri);
-                Drawable wallpaper = Drawable.createFromStream(is, wallpaperUri.toString());
-                rootLayout.setBackground(wallpaper);
+                try (InputStream is = getContentResolver().openInputStream(wallpaperUri)) {
+                    Drawable wallpaper = Drawable.createFromStream(is, wallpaperUri.toString());
+                    rootLayout.setBackground(wallpaper);
+                }
             } catch (Exception e) {
                 Log.e(TAG, "Failed to load wallpaper", e);
                 Toast.makeText(this, "Failed to load custom wallpaper", Toast.LENGTH_SHORT).show();
@@ -85,11 +93,104 @@ public class MainActivity extends AppCompatActivity {
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
         }, 200);
 
-        serverUrl = getIntent().getStringExtra("server_url");
-        username = getIntent().getStringExtra("username");
-        roomId = getIntent().getStringExtra("room_id");
-        encryptionKeyHex = getIntent().getStringExtra("encryption_key");
-        daita = getIntent().getStringExtra("daita_enabled");
+        Intent intent = getIntent();
+        serverUrl = intent.getStringExtra("server_url");
+        username = intent.getStringExtra("username");
+        roomId = intent.getStringExtra("room_id");
+        encryptionKeyHex = intent.getStringExtra("encryption_key");
+        daita = intent.getStringExtra("daita_enabled");
+        privatePassword = intent.getStringExtra("private_password");
+        isGroupChat = intent.getBooleanExtra("is_group_chat", false);
+
+        if (!isGroupChat && privatePassword != null && !privatePassword.isEmpty()) {
+            new Thread(() -> {
+                try {
+                    Ed25519PrivateKeyParameters signingPrivateKey = loadEd25519PrivateKey();
+                    Ed25519PublicKeyParameters signingPublicKey;
+
+                    if (signingPrivateKey != null) {
+                        signingPublicKey = loadEd25519PublicKey();
+                        if (signingPublicKey == null) {
+                            signingPublicKey = signingPrivateKey.generatePublicKey();
+                            saveEd25519PublicKey(signingPublicKey);
+                        }
+                        Log.d(TAG, "Loaded existing Ed25519 key pair.");
+                    } else {
+                        SecureRandom random = new SecureRandom();
+                        signingPrivateKey = new Ed25519PrivateKeyParameters(random);
+                        signingPublicKey = signingPrivateKey.generatePublicKey();
+
+                        saveEd25519PrivateKey(signingPrivateKey);
+                        saveEd25519PublicKey(signingPublicKey);
+                        Log.d(TAG, "Generated and saved new Ed25519 key pair.");
+                    }
+
+                    KeyExchange.KeyConfirmationListener listener = new KeyExchange.KeyConfirmationListener() {
+                        @Override
+                        public void onKeyReceivedForConfirmation(String peerEdDsaHex, Runnable onConfirm, Runnable onReject) {
+                            runOnUiThread(() -> {
+                                try {
+                                    Ed25519PublicKeyParameters myPublicKey = loadEd25519PublicKey();
+
+                                    String myFingerprint = "<unavailable>";
+                                    if (myPublicKey != null) {
+                                        byte[] myPubBytes = myPublicKey.getEncoded();
+                                        byte[] myHash = MessageDigest.getInstance("SHA-256").digest(myPubBytes);
+                                        myFingerprint = bytesToHex(myHash);
+                                    }
+
+                                    byte[] peerPubBytes = hexStringToByteArray(peerEdDsaHex);
+                                    byte[] peerHash = MessageDigest.getInstance("SHA-256").digest(peerPubBytes);
+                                    String peerFingerprint = bytesToHex(peerHash);
+
+                                    String message = "Peer Ed25519 Public Key Fingerprint:\n" + peerFingerprint +
+                                            "\n\nYour Ed25519 Public Key Fingerprint:\n" + myFingerprint +
+                                            "\n\nDo you confirm this key?";
+
+                                    new androidx.appcompat.app.AlertDialog.Builder(MainActivity.this)
+                                            .setTitle("Key Confirmation")
+                                            .setMessage(message)
+                                            .setCancelable(false)
+                                            .setPositiveButton("Confirm", (dialog, which) -> {
+                                                onConfirm.run();
+                                                Toast.makeText(MainActivity.this, "Key confirmed", Toast.LENGTH_SHORT).show();
+                                            })
+                                            .setNegativeButton("Reject", (dialog, which) -> {
+                                                onReject.run();
+                                                Toast.makeText(MainActivity.this, "Key rejected", Toast.LENGTH_SHORT).show();
+                                                finishAffinity();
+                                            })
+                                            .show();
+
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Failed to display fingerprint", e);
+                                    Toast.makeText(MainActivity.this, "Error computing fingerprint", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                    };
+
+
+
+                    String sharedSecretB64 = KeyExchange.performEcdhKeyExchange(
+                            MainActivity.this,
+                            roomId,
+                            signingPrivateKey,
+                            signingPublicKey,
+                            serverUrl,
+                            listener
+                    );
+
+                    byte[] secretBytes = Base64.decode(sharedSecretB64, Base64.NO_WRAP);
+                    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                    byte[] keyBytes = digest.digest(secretBytes);
+                    encryptionKeyHex = bytesToHex(keyBytes);
+                    Log.d(TAG, "Derived symmetric key for private chat");
+                } catch (Exception e) {
+                    Log.e(TAG, "Key exchange failed", e);
+                }
+            }).start();
+        }
 
         messageAdapter = new MessageAdapter(messageList);
         RecyclerView recyclerView = findViewById(R.id.recyclerView);
@@ -127,8 +228,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         recordButton.setOnClickListener(v -> {
-            if (isRecording) stopRecording();
-            else startRecording();
+            if (isRecording) stopRecording(); else startRecording();
         });
 
         uploadImageButton.setOnClickListener(v -> openImagePicker());
@@ -138,6 +238,85 @@ public class MainActivity extends AppCompatActivity {
         if ("true".equalsIgnoreCase(daita)) {
             startFakeTrafficThread();
         }
+    }
+
+    private static byte[] hexStringToByteArray(String s) {
+        int len = s.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
+                    + Character.digit(s.charAt(i + 1), 16));
+        }
+        return data;
+    }
+
+    private void saveEd25519PrivateKey(Ed25519PrivateKeyParameters key) {
+        SharedPreferences prefs = getSharedPreferences("KeyPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        String base64 = Base64.encodeToString(key.getEncoded(), Base64.NO_WRAP);
+
+        String encrypted = CryptoUtil.encrypt_data(base64, privatePassword);
+        if (encrypted != null) {
+            editor.putString("ed_private_key", encrypted);
+            editor.apply();
+        } else {
+            Log.e(TAG, "Failed to encrypt private key");
+        }
+    }
+
+    private void saveEd25519PublicKey(Ed25519PublicKeyParameters key) {
+        SharedPreferences prefs = getSharedPreferences("KeyPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        String base64 = Base64.encodeToString(key.getEncoded(), Base64.NO_WRAP);
+
+        String encrypted = CryptoUtil.encrypt_data(base64, privatePassword);
+        if (encrypted != null) {
+            editor.putString("ed_public_key", encrypted);
+            editor.apply();
+        } else {
+            Log.e(TAG, "Failed to encrypt public key");
+        }
+    }
+
+
+    @Nullable
+    private Ed25519PrivateKeyParameters loadEd25519PrivateKey() {
+        SharedPreferences prefs = getSharedPreferences("KeyPrefs", MODE_PRIVATE);
+        String encrypted = prefs.getString("ed_private_key", null);
+        if (encrypted != null) {
+            String decryptedBase64 = CryptoUtil.decrypt_data(encrypted, privatePassword);
+            if (decryptedBase64 == null || decryptedBase64.equals("DECRYPTION_FAILED")) {
+                Log.e(TAG, "Failed to decrypt private key");
+                return null;
+            }
+            byte[] keyBytes = Base64.decode(decryptedBase64, Base64.NO_WRAP);
+            return new Ed25519PrivateKeyParameters(keyBytes, 0);
+        }
+        return null;
+    }
+
+    @Nullable
+    private Ed25519PublicKeyParameters loadEd25519PublicKey() {
+        SharedPreferences prefs = getSharedPreferences("KeyPrefs", MODE_PRIVATE);
+        String encrypted = prefs.getString("ed_public_key", null);
+        if (encrypted != null) {
+            String decryptedBase64 = CryptoUtil.decrypt_data(encrypted, privatePassword);
+            if (decryptedBase64 == null || decryptedBase64.equals("DECRYPTION_FAILED")) {
+                Log.e(TAG, "Failed to decrypt public key");
+                return null;
+            }
+            byte[] keyBytes = Base64.decode(decryptedBase64, Base64.NO_WRAP);
+            return new Ed25519PublicKeyParameters(keyBytes, 0);
+        }
+        return null;
+    }
+
+
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
     private void startFakeTrafficThread() {
@@ -264,27 +443,24 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     byte[] audioBytes = readFileToBytes(audioFile);
                     String base64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP);
-                    String message = "<audio>" + base64 + "</audio>";
-                    String composed = "<strong>" + username + "</strong>: " + message;
-                    String padded = padMessage(composed, 2048);
-                    String encrypted = CryptoUtil.encrypt_data(padded, encryptionKeyHex);
+                    String message = "<strong>" + username + "</strong>: " + "<audio>" + base64 + "</audio>";
+                    String encrypted = CryptoUtil.encrypt_data(message, encryptionKeyHex);
                     if (encrypted != null) {
                         MessageService.sendEncryptedMessage(encrypted, roomId, serverUrl);
                     }
                 } catch (IOException e) {
-                    Log.e(TAG, "Error reading audio file", e);
+                    Log.e(TAG, "Failed to send audio message", e);
                 }
             });
-
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             e.printStackTrace();
-            Toast.makeText(this, "Error stopping recording!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Recording error", Toast.LENGTH_SHORT).show();
         }
     }
 
     private byte[] readFileToBytes(File file) throws IOException {
         try (FileInputStream fis = new FileInputStream(file);
-             ByteArrayOutputStream bos = new ByteArrayOutputStream(8192)) {
+             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[4096];
             int read;
             while ((read = fis.read(buffer)) != -1) {
@@ -303,60 +479,30 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
-            Uri imageUri = data.getData();
 
-            backgroundHandler.post(() -> {
-                try (InputStream input1 = getContentResolver().openInputStream(imageUri)) {
-                    BitmapFactory.Options options = new BitmapFactory.Options();
-                    options.inJustDecodeBounds = true;
-                    BitmapFactory.decodeStream(input1, null, options);
+        if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null) {
+            Uri selectedImageUri = data.getData();
+            if (selectedImageUri != null) {
+                try {
+                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), selectedImageUri);
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 50, baos);
+                    byte[] imageBytes = baos.toByteArray();
 
-                    int scale = 1, maxDim = 1024;
-                    while (options.outWidth / scale > maxDim || options.outHeight / scale > maxDim) {
-                        scale *= 2;
-                    }
+                    String base64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP);
+                    String message = "<strong>" + username + "</strong>: " + "<media>" + base64 + "</media>";
 
-                    try (InputStream input2 = getContentResolver().openInputStream(imageUri)) {
-                        options.inJustDecodeBounds = false;
-                        options.inSampleSize = scale;
-
-                        Bitmap bitmap = BitmapFactory.decodeStream(input2, null, options);
-                        if (bitmap == null) {
-                            runOnUiThread(() -> Toast.makeText(this, "Failed to decode image", Toast.LENGTH_SHORT).show());
-                            return;
+                    backgroundHandler.post(() -> {
+                        String encrypted = CryptoUtil.encrypt_data(message, encryptionKeyHex);
+                        if (encrypted != null) {
+                            MessageService.sendEncryptedMessage(encrypted, roomId, serverUrl);
                         }
-
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream(8192);
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
-                        bitmap.recycle();
-
-                        String base64Image = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-                        String message = "<media>" + base64Image + "</media>";
-                        String composed = "<strong>" + username + "</strong>: " + message;
-                        String padded = padMessage(composed, 2048);
-                        String encrypted = CryptoUtil.encrypt_data(padded, encryptionKeyHex);
-
-                        runOnUiThread(() -> {
-                            if (encrypted != null) {
-                                MessageService.sendEncryptedMessage(encrypted, roomId, serverUrl);
-                                Toast.makeText(this, "Image sent", Toast.LENGTH_SHORT).show();
-                            } else {
-                                Toast.makeText(this, "Encryption failed for image", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
+                    });
                 } catch (IOException e) {
-                    Log.e(TAG, "Failed to handle image", e);
-                    runOnUiThread(() -> Toast.makeText(this, "Failed to read image", Toast.LENGTH_SHORT).show());
+                    Log.e(TAG, "Failed to process selected image", e);
+                    Toast.makeText(this, "Failed to send image", Toast.LENGTH_SHORT).show();
                 }
-            });
+            }
         }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        handler.removeCallbacks(fetchRunnable);
     }
 }

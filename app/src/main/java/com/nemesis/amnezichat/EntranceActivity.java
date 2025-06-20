@@ -29,8 +29,8 @@ public class EntranceActivity extends AppCompatActivity {
 
     private Button createRoomButton, joinRoomButton, submitButton, pickWallpaperButton, forgetEverythingButton;
     private TextView generatedRoomIdLabel, errorMessageText;
-    private EditText roomIdInput, serverUrlInput, usernameInput, roomPasswordInput;
-    private CheckBox rememberSettingsCheckbox, daitaCheckbox;
+    private EditText roomIdInput, serverUrlInput, usernameInput, roomPasswordInput, privatePasswordInput;
+    private CheckBox rememberSettingsCheckbox, daitaCheckbox, isGroupChatCheckbox;
 
     private String choice = "";
 
@@ -51,19 +51,23 @@ public class EntranceActivity extends AppCompatActivity {
         serverUrlInput = findViewById(R.id.serverUrlInput);
         usernameInput = findViewById(R.id.usernameInput);
         roomPasswordInput = findViewById(R.id.roomPasswordInput);
+        privatePasswordInput = findViewById(R.id.privatePasswordInput);
         rememberSettingsCheckbox = findViewById(R.id.rememberSettingsCheckbox);
         daitaCheckbox = findViewById(R.id.daitaCheckbox);
+        isGroupChatCheckbox = findViewById(R.id.isGroupChatCheckbox);
 
         SharedPreferences prefs = getSharedPreferences("ChatPrefs", MODE_PRIVATE);
         boolean rememberSettings = prefs.getBoolean("remember_settings", false);
         rememberSettingsCheckbox.setChecked(rememberSettings);
         daitaCheckbox.setChecked(prefs.getBoolean("daita_enabled", false));
+        isGroupChatCheckbox.setChecked(prefs.getBoolean("is_group_chat", false));
 
         if (rememberSettings) {
             serverUrlInput.setText(prefs.getString("server_url", ""));
             usernameInput.setText(prefs.getString("username", ""));
             roomIdInput.setText(prefs.getString("room_id", ""));
             roomPasswordInput.setText(prefs.getString("room_password", ""));
+            privatePasswordInput.setText(prefs.getString("private_password", ""));
 
             if (!roomIdInput.getText().toString().isEmpty()) {
                 roomIdInput.setVisibility(View.VISIBLE);
@@ -80,7 +84,11 @@ public class EntranceActivity extends AppCompatActivity {
             choice = "";
         }
 
-        roomPasswordInput.setVisibility(View.VISIBLE);
+        updatePasswordFieldsVisibility(isGroupChatCheckbox.isChecked());
+
+        isGroupChatCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            updatePasswordFieldsVisibility(isChecked);
+        });
 
         createRoomButton.setOnClickListener(v -> {
             choice = "create";
@@ -118,8 +126,10 @@ public class EntranceActivity extends AppCompatActivity {
             serverUrlInput.setText("");
             usernameInput.setText("");
             roomPasswordInput.setText("");
+            privatePasswordInput.setText("");
             rememberSettingsCheckbox.setChecked(false);
             daitaCheckbox.setChecked(false);
+            isGroupChatCheckbox.setChecked(false);
             roomIdInput.setVisibility(View.GONE);
             generatedRoomIdLabel.setVisibility(View.GONE);
             errorMessageText.setVisibility(View.GONE);
@@ -133,15 +143,22 @@ public class EntranceActivity extends AppCompatActivity {
             String username = usernameInput.getText().toString().trim();
             String roomId = roomIdInput.getText().toString().trim();
             String roomPassword = roomPasswordInput.getText().toString().trim();
+            String privatePassword = privatePasswordInput.getText().toString().trim();
             boolean daitaEnabled = daitaCheckbox.isChecked();
+            boolean isGroupChat = isGroupChatCheckbox.isChecked();
 
             if (serverUrl.isEmpty() || username.isEmpty()) {
                 showError("Please fill in Server URL and Username.");
                 return;
             }
 
-            if (roomPassword.length() < 8) {
+            if (isGroupChat && roomPassword.length() < 8) {
                 showError("Room password must be at least 8 characters.");
+                return;
+            }
+
+            if (!isGroupChat && privatePassword.length() < 8) {
+                showError("Secret encryption password must be at least 8 characters.");
                 return;
             }
 
@@ -155,9 +172,11 @@ public class EntranceActivity extends AppCompatActivity {
                 return;
             }
 
+            String keyPassword = isGroupChat ? roomPassword : privatePassword;
+
             String encryptionKeyHex;
             try {
-                encryptionKeyHex = deriveKeyFromPassword(roomPassword);
+                encryptionKeyHex = deriveKeyFromPassword(keyPassword);
             } catch (Exception e) {
                 showError("Failed to derive encryption key.");
                 return;
@@ -170,7 +189,9 @@ public class EntranceActivity extends AppCompatActivity {
                 editor.putString("username", username);
                 editor.putString("room_id", roomId);
                 editor.putString("room_password", roomPassword);
+                editor.putString("private_password", privatePassword);
                 editor.putBoolean("daita_enabled", daitaEnabled);
+                editor.putBoolean("is_group_chat", isGroupChat);
             } else {
                 editor.clear();
             }
@@ -184,9 +205,21 @@ public class EntranceActivity extends AppCompatActivity {
             intent.putExtra("room_id", roomId);
             intent.putExtra("encryption_key", encryptionKeyHex);
             intent.putExtra("daita_enabled", String.valueOf(daitaEnabled));
+            intent.putExtra("private_password", privatePassword);
+            intent.putExtra("is_group_chat", isGroupChat);
             startActivity(intent);
             finish();
         });
+    }
+
+    private void updatePasswordFieldsVisibility(boolean isGroupChat) {
+        if (isGroupChat) {
+            roomPasswordInput.setVisibility(View.VISIBLE);
+            privatePasswordInput.setVisibility(View.GONE);
+        } else {
+            roomPasswordInput.setVisibility(View.GONE);
+            privatePasswordInput.setVisibility(View.VISIBLE);
+        }
     }
 
     @Override

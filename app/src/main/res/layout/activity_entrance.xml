@@ -2,13 +2,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
     android:background="#121212">
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
+        android:layout_height="match_parent"
         android:fillViewport="true">
 
         <LinearLayout
@@ -16,19 +14,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
-            android:padding="24dp"
+            android:padding="16dp"
             android:background="#1E1E1E"
             android:elevation="4dp"
             android:clipToPadding="false"
-            android:layout_margin="16dp"
-            android:layout_gravity="center">
+            android:layout_margin="12dp">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="25dp" />
 
             <Button
                 android:id="@+id/createRoomButton"
                 android:text="Create Room"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="12dp"
+                android:layout_height="50dp"
+                android:textSize="18sp"
+                android:layout_marginBottom="8dp"
                 android:backgroundTint="#448AFF"
                 android:textColor="#121212"
                 android:textAllCaps="false"
@@ -38,8 +40,9 @@
                 android:id="@+id/joinRoomButton"
                 android:text="Join Room"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="24dp"
+                android:layout_height="50dp"
+                android:textSize="18sp"
+                android:layout_marginBottom="16dp"
                 android:backgroundTint="#03DAC5"
                 android:textColor="#121212"
                 android:textAllCaps="false"
@@ -52,29 +55,29 @@
                 android:text="Generated Room ID:"
                 android:textColor="#E0E0E0"
                 android:textStyle="bold"
-                android:layout_marginBottom="8dp"
+                android:layout_marginBottom="6dp"
                 android:visibility="gone" />
 
             <EditText
                 android:id="@+id/roomIdInput"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="40dp"
                 android:hint="Enter Room ID"
                 android:visibility="gone"
-                android:padding="12dp"
+                android:padding="8dp"
                 android:background="@drawable/edit_text_background_dark"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 android:textColor="#FFFFFF"
                 android:textCursorDrawable="@drawable/cursor_color_white" />
 
             <EditText
                 android:id="@+id/serverUrlInput"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="40dp"
                 android:hint="Server URL"
-                android:padding="12dp"
+                android:padding="8dp"
                 android:background="@drawable/edit_text_background_dark"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 android:textColor="#FFFFFF"
                 android:inputType="textUri"
                 android:textCursorDrawable="@drawable/cursor_color_white" />
@@ -82,43 +85,70 @@
             <EditText
                 android:id="@+id/usernameInput"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="40dp"
                 android:hint="Username"
-                android:padding="12dp"
+                android:padding="8dp"
                 android:background="@drawable/edit_text_background_dark"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 android:textColor="#FFFFFF"
                 android:textCursorDrawable="@drawable/cursor_color_white" />
 
             <EditText
                 android:id="@+id/roomPasswordInput"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="40dp"
                 android:hint="Room Password (min 8 chars)"
                 android:inputType="textPassword"
-                android:padding="12dp"
+                android:padding="8dp"
                 android:background="@drawable/edit_text_background_dark"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 android:textColor="#FFFFFF"
                 android:textCursorDrawable="@drawable/cursor_color_white" />
 
-            <CheckBox
-                android:id="@+id/rememberSettingsCheckbox"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Remember settings"
-                android:textColor="#E0E0E0"
-                android:buttonTint="#448AFF"
-                android:layout_marginBottom="8dp" />
+            <EditText
+                android:id="@+id/privatePasswordInput"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:hint="Secret Encryption Password"
+                android:inputType="textPassword"
+                android:padding="8dp"
+                android:background="@drawable/edit_text_background_dark"
+                android:layout_marginBottom="12dp"
+                android:textColor="#FFFFFF"
+                android:textCursorDrawable="@drawable/cursor_color_white" />
 
-            <CheckBox
-                android:id="@+id/daitaCheckbox"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Enable DAITA"
-                android:textColor="#E0E0E0"
-                android:buttonTint="#FF5722"
-                android:layout_marginBottom="16dp" />
+                android:orientation="vertical"
+                android:layout_marginBottom="8dp">
+
+                <CheckBox
+                    android:id="@+id/isGroupChatCheckbox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Is Group Chat?"
+                    android:textColor="#E0E0E0"
+                    android:buttonTint="#8BC34A"
+                    android:layout_marginBottom="4dp" />
+
+                <CheckBox
+                    android:id="@+id/rememberSettingsCheckbox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Remember settings"
+                    android:textColor="#E0E0E0"
+                    android:buttonTint="#448AFF"
+                    android:layout_marginBottom="4dp" />
+
+                <CheckBox
+                    android:id="@+id/daitaCheckbox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Enable DAITA"
+                    android:textColor="#E0E0E0"
+                    android:buttonTint="#FF5722" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/errorMessageText"
@@ -127,14 +157,15 @@
                 android:textColor="#CF6679"
                 android:textStyle="bold"
                 android:visibility="gone"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="12dp" />
 
             <Button
                 android:id="@+id/pickWallpaperButton"
                 android:text="Pick Wallpaper"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="16dp"
+                android:layout_height="50dp"
+                android:textSize="18sp"
+                android:layout_marginBottom="12dp"
                 android:backgroundTint="#FFB300"
                 android:textColor="#121212"
                 android:textAllCaps="false"
@@ -144,8 +175,9 @@
                 android:id="@+id/forgetEverythingButton"
                 android:text="Forget Everything"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="16dp"
+                android:layout_height="50dp"
+                android:textSize="18sp"
+                android:layout_marginBottom="12dp"
                 android:backgroundTint="#D32F2F"
                 android:textColor="#FFFFFF"
                 android:textAllCaps="false"
@@ -155,7 +187,8 @@
                 android:id="@+id/submitButton"
                 android:text="Submit"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="50dp"
+                android:textSize="18sp"
                 android:backgroundTint="#448AFF"
                 android:textColor="#121212"
                 android:textAllCaps="false"

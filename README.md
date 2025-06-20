@@ -3,17 +3,19 @@
 
 <img src="banner.png" width="1200">
 
-## Anti-forensic and secure messenger for smartphones
+## RAM-only secure messenger for smartphones
 
 <!-- DESCRIPTION -->
 ## Description:
 
-An anti-forensic messenger offers significant benefits by enhancing the privacy and security of digital communications. It is designed to prevent forensic investigators or malicious actors from recovering, analyzing, or tracing messages and related metadata. By employing advanced encryption, secure deletion methods, and obfuscation techniques, these messengers ensure that deleted or hidden communications are nearly impossible to recover.
+RAM-only secure messengers offer enhanced privacy and security by minimizing data persistence and exposure. A RAM-only system ensures that all user data, including messages and encryption keys, are stored temporarily in volatile memory (RAM) rather than on a hard drive, which significantly reduces the risk of data retrieval after shutdown or compromise.
 
 <!-- FEATURES -->
 ## Features:
 
 - ChaCha20-Poly1305 for E2E encryption
+
+- Ed25519 and X25519 for ephemeral key exchange
 
 - Argon2id for key derivation with memory cost of 19456KB, iterations of 2, and parallelization of 1
 
